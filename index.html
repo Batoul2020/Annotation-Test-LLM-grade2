@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US English LLM Assessment Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #151820;
+    --surface2: #1c2030;
+    --border: #252a3a;
+    --accent: #4f8ef7;
+    --accent2: #f7c04f;
+    --green: #4fd18a;
+    --red: #f7604f;
+    --text: #e8eaf2;
+    --muted: #6b7280;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    background-image: radial-gradient(ellipse at 20% 20%, rgba(79,142,247,0.07) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 80%, rgba(247,192,79,0.05) 0%, transparent 60%);
+  }
+
+  /* HEADER */
+  .header {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.3rem;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--accent2); }
+  .timer-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--accent2);
+    letter-spacing: 0.05em;
+  }
+  .timer-box.warning { color: var(--red); border-color: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  /* PROGRESS */
+  .progress-wrap {
+    width: 100%;
+    max-width: 860px;
+    margin-bottom: 24px;
+  }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 5px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 99px;
+    transition: width 0.4s ease;
+  }
+
+  /* CARD */
+  .card {
+    width: 100%;
+    max-width: 860px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 36px 40px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .category-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(79,142,247,0.1);
+    border: 1px solid rgba(79,142,247,0.2);
+    border-radius: 4px;
+    padding: 3px 10px;
+    margin-bottom: 16px;
+  }
+  .question-num {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .question-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.25rem;
+    line-height: 1.65;
+    color: var(--text);
+    margin-bottom: 28px;
+  }
+
+  /* OPTIONS */
+  .options { display: flex; flex-direction: column; gap: 12px; }
+  .option {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    user-select: none;
+  }
+  .option:hover:not(.disabled) {
+    border-color: var(--accent);
+    background: rgba(79,142,247,0.05);
+    transform: translateX(4px);
+  }
+  .option.selected { border-color: var(--accent); background: rgba(79,142,247,0.08); }
+  .option.correct { border-color: var(--green); background: rgba(79,209,138,0.08); }
+  .option.wrong { border-color: var(--red); background: rgba(247,96,79,0.08); }
+  .option.disabled { cursor: default; }
+  .opt-letter {
+    min-width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--muted);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .option.selected .opt-letter { background: var(--accent); color: #fff; }
+  .option.correct .opt-letter { background: var(--green); color: #fff; }
+  .option.wrong .opt-letter { background: var(--red); color: #fff; }
+  .opt-text { font-size: 0.95rem; line-height: 1.5; color: var(--text); }
+
+  /* EXPLANATION */
+  .explanation {
+    margin-top: 18px;
+    padding: 14px 18px;
+    background: rgba(79,142,247,0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: #a8b8d8;
+    display: none;
+  }
+  .explanation.show { display: block; }
+  .explanation strong { color: var(--accent); }
+
+  /* BUTTONS */
+  .btn-row {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 12px 28px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3a7af5; transform: translateY(-1px); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* SCREENS */
+  .screen { width: 100%; max-width: 860px; }
+  .screen.hidden { display: none; }
+
+  /* START SCREEN */
+  .start-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 52px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .start-card::before {
+    content:'';
+    position:absolute; top:0;left:0;right:0;height:3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .start-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.4rem;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+  }
+  .start-title em { color: var(--accent2); font-style: italic; }
+  .start-sub { color: var(--muted); font-size: 1rem; line-height: 1.6; max-width: 540px; margin: 0 auto 32px; }
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 36px;
+  }
+  .stat-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 24px;
+    text-align: center;
+    min-width: 110px;
+  }
+  .stat-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 500;
+    color: var(--accent);
+    display: block;
+  }
+  .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-top: 4px; }
+  .topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 36px;
+  }
+  .topic-pill {
+    background: rgba(79,142,247,0.08);
+    border: 1px solid rgba(79,142,247,0.2);
+    color: var(--accent);
+    border-radius: 99px;
+    padding: 5px 14px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .best-score-display {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .best-score-display span { color: var(--accent2); font-weight: 700; }
+
+  /* RESULTS */
+  .results-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px 48px 36px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .results-card::before {
+    content:'';
+    position:absolute; top:0;left:0;right:0;height:3px;
+    background: linear-gradient(90deg, var(--green), var(--accent));
+  }
+  .results-grade {
+    font-family: 'DM Mono', monospace;
+    font-size: 5rem;
+    font-weight: 500;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .results-label { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 28px; }
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .res-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 12px;
+  }
+  .res-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .res-key { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .review-section { margin-top: 36px; text-align: left; }
+  .review-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.2rem;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .review-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+  }
+  .review-q { color: var(--muted); font-size: 0.78rem; margin-bottom: 6px; font-weight: 700; }
+  .review-text { margin-bottom: 10px; line-height: 1.5; }
+  .review-answers { display: flex; flex-wrap: wrap; gap: 8px; }
+  .review-ans {
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .review-ans.your-wrong { background: rgba(247,96,79,0.12); color: var(--red); border: 1px solid rgba(247,96,79,0.3); }
+  .review-ans.correct-ans { background: rgba(79,209,138,0.12); color: var(--green); border: 1px solid rgba(79,209,138,0.3); }
+  .review-ans.your-correct { background: rgba(79,209,138,0.12); color: var(--green); border: 1px solid rgba(79,209,138,0.3); }
+  .verdict {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .verdict.pass { color: var(--green); }
+  .verdict.fail { color: var(--red); }
+  .verdict.good { color: var(--accent2); }
+  .results-btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+
+  @media(max-width:600px){
+    .card { padding: 24px 20px; }
+    .start-card { padding: 32px 20px; }
+    .results-card { padding: 32px 20px; }
+    .question-text { font-size: 1.05rem; }
+    .start-title { font-size: 1.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== START SCREEN ===== -->
+<div id="startScreen" class="screen">
+  <div class="header">
+    <div class="logo">LLM<span>Eval</span> Simulator</div>
+    <div style="font-size:0.78rem;color:var(--muted);font-weight:600;">by Batoul | Data Annotation Academy</div>
+  </div>
+  <div class="start-card">
+    <h1 class="start-title">US English <em>Assessment</em><br>Simulator</h1>
+    <p class="start-sub">A realistic LLM evaluation practice test covering US English language, speech types, American vs British English, and conversation analysis. Based on real Innodata-style evaluation formats.</p>
+    <div class="stats-row">
+      <div class="stat-item"><span class="stat-num">122</span><span class="stat-label">Questions</span></div>
+      <div class="stat-item"><span class="stat-num">122</span><span class="stat-label">Minutes</span></div>
+      <div class="stat-item"><span class="stat-num">4</span><span class="stat-label">Categories</span></div>
+      <div class="stat-item"><span class="stat-num">MCQ</span><span class="stat-label">Format</span></div>
+    </div>
+    <div class="topics">
+      <span class="topic-pill">Direct Speech</span>
+      <span class="topic-pill">Indirect / Reported Speech</span>
+      <span class="topic-pill">American vs British English</span>
+      <span class="topic-pill">Conversation Analysis</span>
+      <span class="topic-pill">Formality Levels</span>
+      <span class="topic-pill">Grammar & Usage</span>
+      <span class="topic-pill">Punctuation</span>
+      <span class="topic-pill">LLM Evaluation Logic</span>
+    </div>
+    <div class="best-score-display" id="bestScoreDisplay">Best Score: <span>—</span></div>
+    <button class="btn btn-primary" onclick="startQuiz()" style="font-size:1rem;padding:14px 40px;">Start Assessment →</button>
+  </div>
+</div>
+
+<!-- ===== QUIZ SCREEN ===== -->
+<div id="quizScreen" class="screen hidden">
+  <div class="header">
+    <div class="logo">LLM<span>Eval</span> Simulator</div>
+    <div class="timer-box" id="timerBox">⏱ <span id="timerDisplay">122:00</span></div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span id="progressText">Question 1 / 122</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+  <div class="card" id="questionCard">
+    <div class="category-badge" id="categoryBadge">Category</div>
+    <div class="question-num" id="questionNum">Question 1 of 122</div>
+    <div class="question-text" id="questionText">Loading...</div>
+    <div class="options" id="optionsContainer"></div>
+    <div class="explanation" id="explanation"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" id="prevBtn" onclick="prevQuestion()" disabled>← Previous</button>
+    <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">Next →</button>
+    <button class="btn btn-secondary" id="finishBtn" onclick="finishQuiz()" style="display:none;background:var(--green);color:#fff;border:none;">Submit Assessment</button>
+  </div>
+</div>
+
+<!-- ===== RESULTS SCREEN ===== -->
+<div id="resultsScreen" class="screen hidden">
+  <div class="header">
+    <div class="logo">LLM<span>Eval</span> Simulator</div>
+    <div style="font-size:0.78rem;color:var(--muted);font-weight:600;">Assessment Complete</div>
+  </div>
+  <div class="results-card">
+    <div class="results-grade" id="resultsGrade">—%</div>
+    <div class="results-label">Overall Accuracy</div>
+    <div class="verdict" id="verdictText"></div>
+    <div style="margin-bottom:24px;"></div>
+    <div class="results-grid" id="resultsGrid"></div>
+    <div class="results-btn-row">
+      <button class="btn btn-secondary" onclick="reviewAnswers()">Review Answers</button>
+      <button class="btn btn-primary" onclick="restartQuiz()">Retake Assessment</button>
+    </div>
+    <div class="review-section" id="reviewSection" style="display:none;">
+      <div class="review-title">📋 Answer Review — Incorrect Answers</div>
+      <div id="reviewItems"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// QUESTION BANK — 122 Questions
+// ============================================================
+const ALL_QUESTIONS = [
+  // CATEGORY 1: DIRECT SPEECH (Q1–30)
+  {cat:"Direct Speech",q:"Which sentence correctly uses direct speech?",opts:["She said that she was tired.","She said, \"I am tired.\"","She said I am tired.","She told that she is tired."],ans:1,exp:"Direct speech quotes the speaker's exact words inside quotation marks, with a comma after the reporting verb."},
+  {cat:"Direct Speech",q:"Identify the direct speech in: Tom shouted, \"Watch out for the car!\"",opts:["Tom shouted","Watch out for the car!","Tom shouted Watch out","for the car"],ans:1,exp:"The direct speech is the exact words spoken, placed inside quotation marks: \"Watch out for the car!\""},
+  {cat:"Direct Speech",q:"Which punctuation correctly ends direct speech that is a question?",opts:["He asked, \"Are you ready\".","He asked, \"Are you ready?\"","He asked, \"Are you ready,\"","He asked \"Are you ready?\""],ans:1,exp:"The question mark goes inside the closing quotation mark, and a comma follows the reporting verb."},
+  {cat:"Direct Speech",q:"Where does the comma go in: She whispered ___ \"Don't move.\"",opts:["After whispered",", after whispered","Before whispered","No comma needed"],ans:1,exp:"A comma is placed after the reporting verb (whispered) and before the opening quotation mark."},
+  {cat:"Direct Speech",q:"Which is an example of direct speech?",opts:["He mentioned going home.","She told me she loved Paris.","\"I love Paris,\" she said.","He said that dinner was ready."],ans:2,exp:"Direct speech uses quotation marks and reproduces the speaker's exact words."},
+  {cat:"Direct Speech",q:"Which sentence has incorrect punctuation in direct speech?",opts:["\"Stop!\" he yelled.","He yelled, \"Stop!\"","He yelled \"Stop\"!","\"Stop,\" he yelled."],ans:2,exp:"The exclamation mark belongs inside the closing quotation mark, not outside it."},
+  {cat:"Direct Speech",q:"In US English, which quotation marks are used for direct speech?",opts:["Single quotes: 'Hello'","Double quotes: \"Hello\"","Guillemets: «Hello»","No quotes needed"],ans:1,exp:"US English uses double quotation marks (\") for direct speech, unlike British English which often uses single quotes."},
+  {cat:"Direct Speech",q:"Which correctly punctuates a reporting clause that follows direct speech?",opts:["\"I'm leaving,\" she said.","\"I'm leaving\" she said.","\"I'm leaving.\" she said.","\"I'm leaving\", she said."],ans:0,exp:"When the reporting clause follows direct speech, a comma (not a period) goes inside the closing quotation mark."},
+  {cat:"Direct Speech",q:"Choose the correctly formatted direct speech sentence:",opts:["\"Can we go?\" she asked.","She asked, can we go?","\"Can we go,\" she asked.","Can we go? she asked."],ans:0,exp:"The question mark is placed inside the quotation marks, and the sentence is grammatically complete."},
+  {cat:"Direct Speech",q:"What is the reporting verb in: \"Hurry up!\" the teacher ordered.",opts:["Hurry","Up","Teacher","Ordered"],ans:3,exp:"The reporting verb introduces or follows the direct speech. Here it is 'ordered'."},
+  {cat:"Direct Speech",q:"Which sentence uses nested quotation marks correctly in US English?",opts:["She said, \"He called me 'darling.'\"","She said, 'He called me \"darling.\"'","She said \"He called me \"darling.\"\"","She said, \"He called me darling.\""],ans:0,exp:"In US English, double quotes are used for the outer quotation and single quotes for the nested quotation inside."},
+  {cat:"Direct Speech",q:"Which version correctly splits a direct speech sentence?",opts:["\"I think,\" she said, \"you're wrong.\"","\"I think\" she said \"you're wrong.\"","\"I think,\" she said \"you're wrong.\"","\"I think\" she said, \"you're wrong.\""],ans:0,exp:"When direct speech is interrupted, commas appear inside the first quote and before the second quote, with the reporting clause between."},
+  {cat:"Direct Speech",q:"Which is NOT a feature of direct speech?",opts:["Exact words of the speaker","Quotation marks","Change of pronoun to third person","Original tense of the speaker"],ans:2,exp:"Pronoun changes happen in indirect (reported) speech, not in direct speech where the speaker's words are quoted exactly."},
+  {cat:"Direct Speech",q:"Choose the sentence where the period is correctly placed:",opts:["She said, \"I'll be there.\"","She said, \"I'll be there\".","She said, \"I'll be there,\"","She said, \"I'll be there\""],ans:0,exp:"In US English, periods and commas always go inside the closing quotation mark."},
+  {cat:"Direct Speech",q:"Which sentence correctly uses a capital letter in direct speech?",opts:["He said, \"where are you going?\"","He said, \"Where are you going?\"","he said, \"Where are you going?\"","He said, \"where Are you going?\""],ans:1,exp:"The first word of direct speech is always capitalized, as it begins a new sentence inside the quotation marks."},
+  {cat:"Direct Speech",q:"In LLM evaluation, why is direct speech important to identify?",opts:["It shows the model knows grammar rules","It helps distinguish quoted content from analysis or summary","It indicates the model is creative","It proves the model follows instructions"],ans:1,exp:"Identifying direct speech helps evaluators check whether a model correctly reproduces exact quotes versus paraphrasing or summarizing content."},
+  {cat:"Direct Speech",q:"Which sentence correctly reports a command in direct speech?",opts:["She commanded that sit down.","\"Sit down,\" she commanded.","She commanded, sit down.","Sit down, she commanded."],ans:1,exp:"Commands in direct speech use quotation marks and the imperative form of the verb."},
+  {cat:"Direct Speech",q:"What type of sentence is: \"How beautiful the sunset is!\" she exclaimed.",opts:["Declarative direct speech","Interrogative direct speech","Exclamatory direct speech","Imperative direct speech"],ans:2,exp:"Exclamatory direct speech expresses strong emotion and ends with an exclamation mark."},
+  {cat:"Direct Speech",q:"Which reporting verb best fits: \"Please help me,\" _____ the child.",opts:["Argued","Begged","Announced","Declared"],ans:1,exp:"'Begged' matches the pleading tone of the direct speech. Reporting verbs should reflect the speaker's intent and tone."},
+  {cat:"Direct Speech",q:"Which sentence demonstrates correct capitalization in interrupted direct speech?",opts:["\"Wait,\" he said, \"For me.\"","\"Wait,\" he said, \"for me.\"","\"Wait,\" he Said, \"for me.\"","\"Wait\" he said, \"for me.\""],ans:1,exp:"After an interrupting reporting clause, the continuation of the direct speech is lowercase (unless it starts a new sentence)."},
+  {cat:"Direct Speech",q:"A speech tag is:",opts:["The punctuation at end of a quote","The words that identify the speaker (e.g., 'she said')","The first word in the quote","The subject of the sentence"],ans:1,exp:"A speech tag (or reporting clause) is the phrase that attributes the speech to its speaker."},
+  {cat:"Direct Speech",q:"Which is a dialogue correctly formatted in US English?",opts:["\"Are you coming?\" asked Maria. \"Yes,\" replied John.","\"Are you coming?\" asked Maria. \"yes,\" replied John.","Are you coming? asked Maria. Yes, replied John.","\"Are you coming?\" asked Maria, \"Yes,\" replied John."],ans:0,exp:"Each speaker's words are in quotation marks, and new speakers begin new sentences or paragraphs."},
+  {cat:"Direct Speech",q:"Which sentence is grammatically incorrect in direct speech?",opts:["\"I can't believe it!\" she gasped.","She gasped, \"I can't believe it!\"","\"I can't believe it\", she gasped!","\"I can't believe it,\" she gasped."],ans:2,exp:"The exclamation mark belongs inside the quotes. Placing the comma inside and the exclamation mark outside is incorrect in US English."},
+  {cat:"Direct Speech",q:"What does a reporting verb tell us?",opts:["The emotion of the reader","How, why or with what intention something was said","The subject of the sentence","The tense of the quotation"],ans:1,exp:"Reporting verbs like 'whispered,' 'announced,' or 'insisted' give information about the manner or intention of speech."},
+  {cat:"Direct Speech",q:"Which is the best reporting verb for: \"I absolutely did not steal it,\" _____ the suspect.",opts:["Laughed","Denied","Asked","Greeted"],ans:1,exp:"'Denied' matches the content — the speaker is denying an accusation. Accurate reporting verb selection is a key LLM evaluation skill."},
+  {cat:"Direct Speech",q:"In US English, a comma that follows direct speech goes:",opts:["Outside the closing quotation mark","Inside the closing quotation mark","Before the opening quotation mark","After the reporting verb only"],ans:1,exp:"US English style places commas and periods inside the closing quotation mark, unlike British English."},
+  {cat:"Direct Speech",q:"Which correctly shows two people speaking?",opts:["\"I'm hungry,\" said Leo. \"Me too,\" said Mia.","\"I'm hungry,\" said Leo, \"Me too,\" said Mia.","\"I'm hungry\" said Leo. \"Me too\" said Mia.","I'm hungry said Leo. Me too said Mia."],ans:0,exp:"Each speaker's words are in separate sentences with correct punctuation inside the quotation marks."},
+  {cat:"Direct Speech",q:"Which tag position is grammatically correct?",opts:["She said \"hello\" warmly.","\"Hello,\" warmly she said.","\"Hello,\" she said warmly.","Warmly \"hello\" she said."],ans:2,exp:"The reporting clause ('she said warmly') follows the closing quotation mark naturally, with adverbs placed after the verb."},
+  {cat:"Direct Speech",q:"Which sentence is an example of embedded direct speech in a longer text?",opts:["She told me to leave immediately.","She mentioned the project was done.","The manager announced, \"The meeting is cancelled,\" and left quickly.","He said that it was raining outside."],ans:2,exp:"Embedded direct speech integrates a verbatim quote into a flowing sentence, maintaining quotation marks for the exact words spoken."},
+  {cat:"Direct Speech",q:"For LLM evaluation purposes, which model response BEST handles a direct speech prompt?",opts:["The model ignores the quotation marks","The model changes the speaker's exact words","The model preserves the exact wording, quotes, and speaker attribution","The model removes the quotation marks for readability"],ans:2,exp:"A well-performing LLM should preserve direct speech exactly as given: original words, punctuation, and attribution intact."},
+
+  // CATEGORY 2: INDIRECT / REPORTED SPEECH (Q31–65)
+  {cat:"Reported Speech",q:"Convert to reported speech: She said, \"I am tired.\"",opts:["She said she is tired.","She said she was tired.","She said I am tired.","She told she was tired."],ans:1,exp:"In reported speech, the verb shifts back one tense (backshift): 'am' → 'was'. The pronoun also changes from 'I' to 'she'."},
+  {cat:"Reported Speech",q:"Which is the correct reported speech for: \"I will call you,\" he said.",opts:["He said he would call me.","He said he will call me.","He said he calls me.","He said I will call you."],ans:0,exp:"'Will' becomes 'would' in reported speech. Pronouns also change: 'you' → 'me'."},
+  {cat:"Reported Speech",q:"What is the key grammatical change in reported speech?",opts:["Punctuation changes","Verb tense backshift","Addition of quotation marks","Capitalization of verbs"],ans:1,exp:"Tense backshift is the core change in reported speech: present → past, will → would, can → could, etc."},
+  {cat:"Reported Speech",q:"\"Can you help me?\" she asked. → She asked if ___.",opts:["I can help her","she could help me","I could help her","she can help me"],ans:2,exp:"'Can' becomes 'could' (backshift), and pronouns shift: 'you' → 'I', 'me' → 'her'."},
+  {cat:"Reported Speech",q:"Which word introduces reported questions?",opts:["That","Because","If / Whether","Since"],ans:2,exp:"Yes/no questions in reported speech are introduced by 'if' or 'whether'."},
+  {cat:"Reported Speech",q:"Convert: \"Don't touch that,\" she told him.",opts:["She told him don't touch that.","She told him not to touch that.","She said him not to touch that.","She told that he not touch that."],ans:1,exp:"Reported commands/prohibitions use 'told + object + (not) to + infinitive'."},
+  {cat:"Reported Speech",q:"Which pronoun change is correct when reporting: \"I love my job,\" he said.",opts:["He said he loves his job.","He said I love my job.","He said he loved his job.","He said he loved my job."],ans:2,exp:"Pronoun shifts: 'I' → 'he', 'my' → 'his'. Tense shifts: 'love' → 'loved'."},
+  {cat:"Reported Speech",q:"\"We have finished,\" they said. → They said that ___.",opts:["we had finished","they had finished","they have finished","we have finished"],ans:1,exp:"'Have finished' (present perfect) → 'had finished' (past perfect). 'We' → 'they'."},
+  {cat:"Reported Speech",q:"Which time expression changes in reported speech?",opts:["Never","Now → then","Always","Today → today"],ans:1,exp:"Time expressions shift in reported speech: now→then, today→that day, tomorrow→the next day, yesterday→the day before."},
+  {cat:"Reported Speech",q:"\"I saw it yesterday,\" she said. → She said she had seen it ___.",opts:["yesterday","the day before","the next day","that morning"],ans:1,exp:"'Yesterday' in reported speech becomes 'the day before' (or 'the previous day')."},
+  {cat:"Reported Speech",q:"Which sentence is correct reported speech?",opts:["He asked where does she live.","He asked where she lived.","He asked where she lives.","He asked where did she live."],ans:1,exp:"In reported Wh-questions, the word order returns to normal (subject + verb), and tense backshifts."},
+  {cat:"Reported Speech",q:"\"I might be late,\" he said. → He said he ___.",opts:["might be late","may be late","would be late","could be late"],ans:0,exp:"'Might' does not backshift further — it stays as 'might' in reported speech."},
+  {cat:"Reported Speech",q:"She said, \"This is my house.\" → She said that ___ was her house.",opts:["this","that","it","here"],ans:1,exp:"'This' → 'that' and 'here' → 'there' in reported speech to reflect the shift in reference point."},
+  {cat:"Reported Speech",q:"Which verb correctly introduces a reported command?",opts:["Said","Told","Asked","Reported"],ans:1,exp:"'Told' is used with commands: 'She told him to sit down.' 'Said' is used for statements."},
+  {cat:"Reported Speech",q:"\"Do you enjoy reading?\" → He asked her ___.",opts:["if she enjoys reading","if she enjoyed reading","does she enjoy reading","whether she enjoys reading"],ans:1,exp:"Yes/no questions use 'if/whether', tense backshifts ('enjoy' → 'enjoyed'), and word order is statement-like."},
+  {cat:"Reported Speech",q:"Which tense does NOT backshift in reported speech?",opts:["Present simple","Will","Past perfect","Present continuous"],ans:2,exp:"Past perfect ('had done') is already the furthest back tense — it does not backshift further in reported speech."},
+  {cat:"Reported Speech",q:"\"We are leaving tomorrow,\" she said. → She said they were leaving ___.",opts:["tomorrow","the next day","today","then"],ans:1,exp:"'Tomorrow' shifts to 'the next day' (or 'the following day') in reported speech."},
+  {cat:"Reported Speech",q:"Convert: \"Please be quiet!\" the librarian said to us.",opts:["The librarian said to be quiet.","The librarian told us to be quiet.","The librarian asked are we quiet.","The librarian said us to be quiet."],ans:1,exp:"Reported requests/commands: told + object + to + infinitive."},
+  {cat:"Reported Speech",q:"\"I have never been to Japan,\" she told me. → She told me she ___.",opts:["has never been to Japan","had never been to Japan","never been to Japan","hadn't never been to Japan"],ans:1,exp:"Present perfect ('have been') → Past perfect ('had been') in reported speech."},
+  {cat:"Reported Speech",q:"Which is an example of reported speech used in AI/LLM context?",opts:["The user wrote: \"Give me a list.\"","The model stated that it was unable to assist with that request.","Give me a list — stated the user","A list was given by the model"],ans:1,exp:"In LLM evaluation logs, reported speech is used to summarize model behavior without quoting verbatim, e.g., 'The model stated that...'"},
+  {cat:"Reported Speech",q:"\"I can swim,\" said the boy. → The boy said he ___.",opts:["can swim","could swim","is able to swim","will swim"],ans:1,exp:"'Can' → 'could' in reported speech (modal backshift)."},
+  {cat:"Reported Speech",q:"Which sentence has an error in reported speech?",opts:["She said she had finished her work.","He told me he was going to the gym.","They said they will come tomorrow.","She asked if I had eaten."],ans:2,exp:"'Will' should backshift to 'would': 'They said they would come the next day.'"},
+  {cat:"Reported Speech",q:"Convert: \"Where did you find it?\" he asked her.",opts:["He asked her where did she find it.","He asked her where she had found it.","He asked her where she found it.","He asked her where does she find it."],ans:1,exp:"Past simple ('did find') → Past perfect ('had found'). Word order: subject before verb (no inversion)."},
+  {cat:"Reported Speech",q:"\"I must finish this tonight,\" he said. → He said he ___.",opts:["must finish it that night","had to finish it that night","must finish it tonight","would finish it that night"],ans:1,exp:"'Must' expressing obligation backshifts to 'had to' in reported speech."},
+  {cat:"Reported Speech",q:"\"She is studying,\" he said. → He said she ___.",opts:["is studying","was studying","studied","has been studying"],ans:1,exp:"Present continuous ('is studying') → Past continuous ('was studying') in reported speech."},
+  {cat:"Reported Speech",q:"Which sentence correctly uses 'whether' in reported speech?",opts:["She asked whether he coming.","She asked whether he was coming.","She asked whether is he coming.","She asked if whether he came."],ans:1,exp:"'Whether' introduces reported yes/no questions with normal (non-inverted) word order."},
+  {cat:"Reported Speech",q:"An LLM evaluation task asks you to rate whether a model correctly converts direct to reported speech. The model writes: 'She said that she is happy.' The original was: 'I am happy.' What is the error?",opts:["Wrong pronoun","Missing 'that'","Tense not backshifted ('is' should be 'was')","No error"],ans:2,exp:"The model failed to backshift the tense. 'Am' should become 'was': 'She said that she was happy.'"},
+  {cat:"Reported Speech",q:"\"We were waiting for hours,\" they complained. → They complained that ___.",opts:["they were waiting for hours","they had been waiting for hours","we had been waiting for hours","they are waiting for hours"],ans:1,exp:"Past continuous ('were waiting') → Past perfect continuous ('had been waiting')."},
+  {cat:"Reported Speech",q:"Which correctly reports: \"Don't be late,\" she warned him.",opts:["She warned him don't be late.","She warned him not to be late.","She warned him to not late.","She warned him that don't be late."],ans:1,exp:"Reported warnings follow: verb + object + not + to-infinitive."},
+  {cat:"Reported Speech",q:"In evaluating an LLM's summary, you find it wrote: \"The customer said he want a refund.\" What type of error is this?",opts:["Spelling error","Subject-verb agreement error in reported speech","Wrong reporting verb","Unnecessary pronoun"],ans:1,exp:"After backshift, 'wants' → 'wanted'. The model should have written 'he wanted a refund.'"},
+  {cat:"Reported Speech",q:"\"This will take a long time,\" the manager said. → The manager said ___.",opts:["this would take a long time","that would take a long time","this will take a long time","that this would take a long time"],ans:3,exp:"'This' → 'that', 'will' → 'would'. 'That' is also added as a conjunction introducing reported speech."},
+  {cat:"Reported Speech",q:"Which of the following is an example of 'free indirect speech'?",opts:["She said, \"I am exhausted.\"","She said that she was exhausted.","She was exhausted. What a terrible day it had been.","She told me about being exhausted."],ans:2,exp:"Free indirect speech blends narrator and character voice without quotation marks or a reporting verb — common in literary texts and advanced LLM evaluation."},
+  {cat:"Reported Speech",q:"'Said' vs 'told' — which sentence is correct?",opts:["She told that she was ready.","She said me she was ready.","She told me she was ready.","She said to her she was ready."],ans:2,exp:"'Tell' requires a direct object (told me). 'Say' does not (said she was ready / said to me that...)."},
+  {cat:"Reported Speech",q:"\"I'm not coming,\" she said flatly. Best reported speech version:",opts:["She said flatly she is not coming.","She said flatly that she wasn't coming.","She flatly said she will not come.","She said that she is not coming flatly."],ans:1,exp:"Correct backshift ('am' → 'was'), contraction maintained, adverb placed naturally after the verb."},
+  {cat:"Reported Speech",q:"He said, \"I saw the movie last week.\" → He said he had seen the movie ___.",opts:["last week","the previous week","the week after","next week"],ans:1,exp:"'Last week' shifts to 'the previous week' (or 'the week before') in reported speech."},
+
+  // CATEGORY 3: AMERICAN vs BRITISH ENGLISH (Q66–100)
+  {cat:"AmE vs BrE",q:"Which is the American English spelling?",opts:["Colour","Color","Colur","Coloure"],ans:1,exp:"American English drops the 'u' in words like color, flavor, honor. British English retains it: colour, flavour, honour."},
+  {cat:"AmE vs BrE",q:"What is the British English equivalent of the American word 'elevator'?",opts:["Escalator","Lift","Staircase","Dumbwaiter"],ans:1,exp:"Americans say 'elevator'; British English uses 'lift' for the same device."},
+  {cat:"AmE vs BrE",q:"Which spelling is American English?",opts:["Centre","Center","Centr","Centere"],ans:1,exp:"AmE uses '-er' endings (center, theater, meter) while BrE uses '-re' (centre, theatre, metre)."},
+  {cat:"AmE vs BrE",q:"'Pavement' in British English means what in American English?",opts:["Road","Driveway","Sidewalk","Highway"],ans:2,exp:"BrE 'pavement' = AmE 'sidewalk'. The area beside the road for pedestrians."},
+  {cat:"AmE vs BrE",q:"Which is the American English spelling of the past tense of 'learn'?",opts:["Learnt","Learnd","Learned","Leared"],ans:2,exp:"AmE prefers regular past tenses: learned, burned, spelled. BrE often uses: learnt, burnt, spelt."},
+  {cat:"AmE vs BrE",q:"In American English, what do you call the boot of a car?",opts:["Hood","Trunk","Boot","Back seat"],ans:1,exp:"AmE: trunk | BrE: boot. AmE: hood | BrE: bonnet."},
+  {cat:"AmE vs BrE",q:"Which word would an American use instead of British 'biscuit'?",opts:["Muffin","Cracker / Cookie","Scone","Cake"],ans:1,exp:"BrE 'biscuit' = AmE 'cookie' or 'cracker' (depending on type). In AmE, 'biscuit' refers to a soft bread roll."},
+  {cat:"AmE vs BrE",q:"Which is the American English spelling?",opts:["Analyse","Analize","Analyze","Analysise"],ans:2,exp:"AmE uses '-ize' (analyze, organize, recognize). BrE commonly uses '-ise' (analyse, organise, recognise) though '-ize' is also accepted in BrE."},
+  {cat:"AmE vs BrE",q:"'Autumn' is the British term. What do Americans say?",opts:["Winter","Spring","Fall","Harvest"],ans:2,exp:"Both 'autumn' and 'fall' are used in AmE, but 'fall' is distinctly American. BrE exclusively uses 'autumn'."},
+  {cat:"AmE vs BrE",q:"Which is correct American English spelling?",opts:["Travelling","Traveling","Travlling","Travveling"],ans:1,exp:"AmE uses single 'l' in words like traveling, canceled, modeling. BrE doubles the 'l': travelling, cancelled, modelling."},
+  {cat:"AmE vs BrE",q:"An American says 'apartment.' What does a British person say?",opts:["Suite","Flat","Unit","Room"],ans:1,exp:"BrE 'flat' = AmE 'apartment'."},
+  {cat:"AmE vs BrE",q:"Which is the American English spelling?",opts:["Licence","License (noun)","Licens","Lysense"],ans:1,exp:"In AmE, 'license' is used for both the noun and verb. In BrE, 'licence' is the noun and 'license' the verb."},
+  {cat:"AmE vs BrE",q:"What does an American mean by 'pants'?",opts:["Underwear","Trousers","Shorts","Pajamas"],ans:1,exp:"AmE 'pants' = BrE 'trousers'. In BrE, 'pants' refers to underwear, which can cause confusion."},
+  {cat:"AmE vs BrE",q:"Which phrase is American English?",opts:["Have you got a pen?","Do you have a pen?","You've got a pen?","Got a pen, have you?"],ans:1,exp:"'Do you have' is distinctly American. BrE commonly uses 'have you got'. Both are grammatically correct but culturally distinct."},
+  {cat:"AmE vs BrE",q:"The American word 'eraser' is called what in British English?",opts:["Rubber","Pencil tip","Wiper","Deleter"],ans:0,exp:"BrE uses 'rubber' for what Americans call an 'eraser'. In AmE, 'rubber' often refers to a condom, creating potential misunderstanding."},
+  {cat:"AmE vs BrE",q:"Which is the American English term for 'post' (as in mail)?",opts:["Post","Mail","Delivery","Dispatch"],ans:1,exp:"AmE 'mail' = BrE 'post'. 'Postman' (BrE) = 'mailman' (AmE)."},
+  {cat:"AmE vs BrE",q:"Which spelling is American English?",opts:["Grey","Gray","Graey","Grei"],ans:1,exp:"AmE uses 'gray'; BrE uses 'grey'. Both refer to the same color."},
+  {cat:"AmE vs BrE",q:"'Chips' in British English are equivalent to which American food?",opts:["Potato chips","French fries","Crackers","Pretzels"],ans:1,exp:"BrE 'chips' = AmE 'French fries'. BrE 'crisps' = AmE 'chips'."},
+  {cat:"AmE vs BrE",q:"Which is the American English past tense?",opts:["Dreamt","Dreamed","Dreampt","Dreempt"],ans:1,exp:"AmE strongly prefers regular forms: dreamed, leaped, spelled. BrE often prefers: dreamt, leapt, spelt."},
+  {cat:"AmE vs BrE",q:"How does American English punctuate: She said she was going to the store period.",opts:["She said she was going to the store.","She said she was going to the store,","She said she was going to the store!","She said she was going to the store;"],ans:0,exp:"In AmE, 'period' is the spoken name for the full stop '.'. In BrE, the punctuation mark is called 'full stop'."},
+  {cat:"AmE vs BrE",q:"Which is an example of American English vocabulary in a formal email?",opts:["Please revert with your thoughts.","Please get back to me with your thoughts.","I shall revert shortly.","Kindly do the needful."],ans:1,exp:"'Please get back to me' is standard American business English. 'Revert' meaning 'reply' is common in British/South Asian English but not in American usage."},
+  {cat:"AmE vs BrE",q:"Which sentence uses American English grammar correctly?",opts:["I just ate dinner.","I've just eaten dinner.","I just have eaten dinner.","I did just eat dinner."],ans:0,exp:"AmE uses simple past with 'just' (I just ate). BrE uses present perfect with 'just' (I've just eaten)."},
+  {cat:"AmE vs BrE",q:"'Maths' is the British term. What do Americans say?",opts:["Mathematics","Math","Mathematic","Mathmatics"],ans:1,exp:"AmE: 'math' (no 's'). BrE: 'maths'. Both are abbreviations of 'mathematics'."},
+  {cat:"AmE vs BrE",q:"Which is the correct American English spelling?",opts:["Tyre","Tire","Tyer","Tyre"],ans:1,exp:"AmE 'tire' = BrE 'tyre'. Refers to the rubber covering on a wheel."},
+  {cat:"AmE vs BrE",q:"In American English, 'I could care less' means:",opts:["I care deeply","I don't care at all (informal AmE usage)","I care somewhat","I care more than you"],ans:1,exp:"Though logically 'I couldn't care less' is more correct, 'I could care less' is widely used in American informal speech to mean the same thing — that one doesn't care."},
+  {cat:"AmE vs BrE",q:"An LLM is asked to write in US English. It writes 'The organisation specialises in defence.' What errors does it contain?",opts:["No errors","One error: defence","Two errors: organisation and specialises; defence is also wrong (3 total)","Three BrE spellings: organisation, specialises, defence"],ans:3,exp:"All three words use BrE spelling. AmE: organization, specializes, defense."},
+  {cat:"AmE vs BrE",q:"Which is the American English word for 'queue'?",opts:["Row","File","Line","Series"],ans:2,exp:"AmE: 'line' (stand in line). BrE: 'queue' (queue up)."},
+  {cat:"AmE vs BrE",q:"Which is distinctly American English punctuation usage?",opts:["Placing commas outside quotation marks","Placing commas inside quotation marks","Using single quotes for emphasis","Using a period outside quotation marks"],ans:1,exp:"AmE always places commas and periods inside closing quotation marks. BrE places them outside (logically, based on whether the punctuation belongs to the quote)."},
+  {cat:"AmE vs BrE",q:"The British say 'at the weekend.' What do Americans say?",opts:["At the weekend","On weekend","On the weekend","During weekend"],ans:2,exp:"AmE: 'on the weekend'. BrE: 'at the weekend'."},
+  {cat:"AmE vs BrE",q:"Which is the American English spelling?",opts:["Fulfil","Fulfill","Fullfill","Fulifil"],ans:1,exp:"AmE: 'fulfill' (double l at end). BrE: 'fulfil'."},
+  {cat:"AmE vs BrE",q:"A US English LLM response says: 'The programme was cancelled and the cheque was never cashed.' How many BrE spellings are there?",opts:["One","Two","Three","None"],ans:1,exp:"Two BrE spellings: 'programme' (AmE: program) and 'cheque' (AmE: check). 'Cancelled' is acceptable in both, though AmE often prefers 'canceled'."},
+  {cat:"AmE vs BrE",q:"Which phrase is used in American English to mean a person has died?",opts:["He passed away","He went to the other side","He popped his clogs","He shuffled off this mortal coil"],ans:0,exp:"'Passed away' is standard AmE. 'Popped his clogs' is a British idiom. Both 'passed away' and 'passed' are very common in AmE."},
+  {cat:"AmE vs BrE",q:"In American English, 'momentarily' most commonly means:",opts:["For a moment","In a moment / very soon","At this moment","Never"],ans:1,exp:"AmE 'momentarily' typically means 'in a moment' (soon). BrE uses it to mean 'for a moment'. This is a common source of confusion between the two varieties."},
+  {cat:"AmE vs BrE",q:"Which is the American English spelling?",opts:["Jewellery","Jewelry","Jewlery","Jewellry"],ans:1,exp:"AmE: 'jewelry'. BrE: 'jewellery'."},
+  {cat:"AmE vs BrE",q:"For LLM evaluation: An AI trained on US English produces 'Please ring me at your convenience.' Is this natural AmE?",opts:["Yes, perfectly natural AmE","No, 'ring' meaning 'call' is primarily BrE; AmE uses 'call'","Yes, both are the same","No, neither BrE nor AmE uses 'ring' this way"],ans:1,exp:"'Ring me' (meaning 'call me') is a BrE expression. AmE would say 'call me' or 'give me a call'."},
+
+  // CATEGORY 4: CONVERSATION ANALYSIS & LLM EVAL (Q101–122)
+  {cat:"Conversation Analysis",q:"In a conversation, a 'turn' refers to:",opts:["The direction of topic change","Each individual contribution by a speaker","The number of words spoken","The greeting at the start"],ans:1,exp:"In conversation analysis, a 'turn' is each individual contribution made by a speaker before another person speaks."},
+  {cat:"Conversation Analysis",q:"What is 'adjacency pair' in conversation?",opts:["Two speakers talking simultaneously","A pair of related conversation turns (e.g., question–answer)","Two sentences with the same meaning","A greeting and farewell in the same sentence"],ans:1,exp:"Adjacency pairs are linked conversational exchanges where one turn expects a certain response: question/answer, greeting/greeting, request/acceptance."},
+  {cat:"Conversation Analysis",q:"Which is an example of a coherent adjacency pair?",opts:["A: How are you? B: It's raining.","A: Can you pass the salt? B: Sure.","A: What time is it? B: I like coffee.","A: Hello! B: Goodbye."],ans:1,exp:"A request followed by an acceptance is a coherent adjacency pair. The others have mismatched or unrelated second parts."},
+  {cat:"Conversation Analysis",q:"In LLM evaluation, 'coherence' in a conversation means:",opts:["All sentences are grammatically perfect","The responses logically connect and relate to previous context","The model uses formal language throughout","The model uses only simple vocabulary"],ans:1,exp:"Coherence means the conversation flows logically — each response connects meaningfully to what was said before."},
+  {cat:"Conversation Analysis",q:"A user says: 'I need help.' The model responds: 'The capital of France is Paris.' This is an example of:",opts:["High coherence","Topic shift","Complete incoherence — off-topic response","Appropriate clarification"],ans:2,exp:"The model's response has no connection to the user's message. This is a critical coherence failure in LLM evaluation."},
+  {cat:"Conversation Analysis",q:"What does 'implicature' mean in conversation?",opts:["The literal meaning of words","What is implied but not directly stated","The speaker's accent","The length of an utterance"],ans:1,exp:"Implicature (Gricean concept) refers to meaning that is communicated indirectly. If someone says 'It's a bit cold in here,' they may be implying 'Please close the window.'"},
+  {cat:"Conversation Analysis",q:"Grice's Maxim of Quantity says:",opts:["Be polite and tactful","Be truthful","Say as much as needed, not more or less","Avoid ambiguity"],ans:2,exp:"Grice's Maxim of Quantity: contributions should be as informative as required — not too little, not too much."},
+  {cat:"Conversation Analysis",q:"Which LLM behavior violates Grice's Maxim of Quality?",opts:["Giving a very long answer","Giving a factually incorrect answer","Giving an answer in the wrong language","Giving an answer that's off-topic"],ans:1,exp:"Maxim of Quality: be truthful. A factually incorrect answer directly violates this maxim."},
+  {cat:"Conversation Analysis",q:"In conversation analysis, 'repair' refers to:",opts:["Fixing broken equipment","Correcting or clarifying a communication breakdown","Politely ending a conversation","Adding humor to reduce tension"],ans:1,exp:"Repair in conversation is when a speaker corrects, clarifies, or addresses a misunderstanding to maintain communication flow."},
+  {cat:"Conversation Analysis",q:"Which is an example of 'self-repair' in conversation?",opts:["A: You went — I mean, she went to the store.","B corrects A's grammar","Both speakers say the same thing","A refuses to answer"],ans:0,exp:"Self-repair is when a speaker corrects their own speech mid-utterance, as shown by 'you went — I mean, she went.'"},
+  {cat:"Conversation Analysis",q:"An LLM evaluation rubric asks: 'Does the model maintain topic continuity?' A model response starts discussing gardening after a user asked about cooking. This model would receive:",opts:["High marks for creativity","Low marks for topic drift","High marks for variety","Neutral — topic changes are always acceptable"],ans:1,exp:"Topic continuity is a key quality dimension in LLM evaluation. Unexplained topic drift lowers conversation quality scores."},
+  {cat:"Conversation Analysis",q:"What is 'hedging' in conversational language?",opts:["Interrupting the speaker","Using language that reduces the strength of a claim (e.g., 'I think,' 'maybe')","Speaking very directly","Using technical vocabulary"],ans:1,exp:"Hedging softens statements to show uncertainty or politeness: 'I think this might be right' vs 'This is right.'"},
+  {cat:"Conversation Analysis",q:"Which sentence contains hedging language?",opts:["This is definitely the best solution.","You must do it this way.","This approach could possibly work in some cases.","Do it now."],ans:2,exp:"'Could possibly' and 'in some cases' are hedges — they reduce the certainty and strength of the claim."},
+  {cat:"Conversation Analysis",q:"In evaluating LLM dialogue quality, 'groundedness' means:",opts:["The model stays physically in one place","Model responses are based on actual provided context or facts","The model uses simple, ground-level vocabulary","The model avoids complex topics"],ans:1,exp:"Groundedness in LLM evaluation means the model's responses are anchored in provided information rather than hallucinated or fabricated content."},
+  {cat:"Conversation Analysis",q:"What is 'hallucination' in LLM evaluation?",opts:["The model generating creative fiction","The model confidently producing false or fabricated information","The model refusing to answer","The model generating poetic language"],ans:1,exp:"LLM hallucination = generating confident-sounding content that is factually incorrect or fabricated. A critical failure mode in evaluation."},
+  {cat:"Conversation Analysis",q:"Which response shows the BEST conversational quality for a customer service LLM?",opts:["\"I cannot help with that.\"","\"Error 404: request not understood.\"","\"I understand you're looking for a refund. Let me guide you through the process step by step.\"","\"Refund policy: section 4.2.\""],ans:2,exp:"The best response acknowledges the user's need, shows empathy, and offers concrete help — key quality indicators in LLM customer service evaluation."},
+  {cat:"Conversation Analysis",q:"In US English conversation, 'I'm good' as a response to 'How are you?' is:",opts:["Grammatically incorrect and should never be used","Informal but widely accepted in American English","Formal and professional","British English only"],ans:1,exp:"'I'm good' (vs 'I'm well') is informal AmE. Prescriptive grammar prefers 'I'm well,' but 'I'm good' is extremely common and accepted in American conversational English."},
+  {cat:"Conversation Analysis",q:"Which is a sign of high-quality LLM instruction-following?",opts:["The model produces a response in the wrong format","The model answers a different question than asked","The model completes the task in the format and style requested","The model adds unrequested information to every answer"],ans:2,exp:"Instruction-following is a primary evaluation dimension: the model should complete the exact task requested, in the right format and style."},
+  {cat:"Conversation Analysis",q:"'Pragmatics' in linguistics deals with:",opts:["Grammar rules","How context influences meaning in communication","The history of language","Phonetics and pronunciation"],ans:1,exp:"Pragmatics studies how context, speaker intent, and social conventions influence how utterances are interpreted beyond their literal meaning."},
+  {cat:"Conversation Analysis",q:"In LLM annotation, 'preference ranking' means:",opts:["Choosing your favorite topic","Rating two or more model responses and selecting the better one","Ranking questions by difficulty","Choosing which model to test"],ans:1,exp:"Preference ranking (RLHF-style annotation) involves comparing multiple model outputs and ranking them by quality — a core task in LLM evaluation work."},
+  {cat:"Conversation Analysis",q:"Which is an example of an indirect speech act?",opts:["'Close the door.'","'It's cold in here.' (meaning: please close the window)","'What time is it?' (genuinely asking for the time)","'My name is Sarah.'"],ans:1,exp:"An indirect speech act uses language to perform a function other than its literal meaning. 'It's cold' may indirectly request someone to close a window."},
+  {cat:"Conversation Analysis",q:"An LLM evaluator rates a model response as '1 out of 5' for safety. This most likely means:",opts:["The model was very helpful","The model produced harmful, unsafe, or inappropriate content","The model was grammatically incorrect","The model was too short"],ans:1,exp:"A score of 1 in a safety rubric typically indicates the response contained harmful, dangerous, or policy-violating content — a critical failure flag in annotation work."},
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let questions = [];
+let userAnswers = [];
+let currentIndex = 0;
+let timerInterval = null;
+let secondsLeft = 122 * 60;
+let quizStarted = false;
+let quizFinished = false;
+
+// ============================================================
+// INIT
+// ============================================================
+window.onload = function() {
+  loadBestScore();
+};
+
+function loadBestScore() {
+  const best = localStorage.getItem('llm_best_score');
+  if (best) {
+    document.getElementById('bestScoreDisplay').innerHTML = `Best Score: <span>${best}%</span>`;
+  }
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function startQuiz() {
+  questions = shuffle(ALL_QUESTIONS);
+  userAnswers = new Array(questions.length).fill(null);
+  currentIndex = 0;
+  secondsLeft = 122 * 60;
+  quizFinished = false;
+
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('quizScreen').classList.remove('hidden');
+
+  renderQuestion();
+  startTimer();
+}
+
+// ============================================================
+// TIMER
+// ============================================================
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    updateTimerDisplay();
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      finishQuiz();
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(secondsLeft / 60);
+  const s = secondsLeft % 60;
+  document.getElementById('timerDisplay').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const box = document.getElementById('timerBox');
+  if (secondsLeft <= 300) box.classList.add('warning');
+  else box.classList.remove('warning');
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderQuestion() {
+  const q = questions[currentIndex];
+  const total = questions.length;
+
+  document.getElementById('categoryBadge').textContent = q.cat;
+  document.getElementById('questionNum').textContent = `Question ${currentIndex + 1} of ${total}`;
+  document.getElementById('questionText').textContent = q.q;
+  document.getElementById('progressText').textContent = `Question ${currentIndex + 1} / ${total}`;
+  document.getElementById('progressPct').textContent = Math.round(((currentIndex) / total) * 100) + '%';
+  document.getElementById('progressFill').style.width = ((currentIndex / total) * 100) + '%';
+
+  const container = document.getElementById('optionsContainer');
+  container.innerHTML = '';
+  const exp = document.getElementById('explanation');
+  exp.className = 'explanation';
+  exp.innerHTML = '';
+
+  const answered = userAnswers[currentIndex] !== null;
+
+  q.opts.forEach((opt, i) => {
+    const div = document.createElement('div');
+    div.className = 'option' + (answered ? ' disabled' : '');
+    const letter = ['A','B','C','D'][i];
+
+    let extraClass = '';
+    if (answered) {
+      if (i === q.ans) extraClass = ' correct';
+      else if (i === userAnswers[currentIndex]) extraClass = ' wrong';
+    } else if (userAnswers[currentIndex] === i) {
+      extraClass = ' selected';
+    }
+    div.className = 'option' + (answered ? ' disabled' : '') + extraClass;
+
+    div.innerHTML = `<div class="opt-letter">${letter}</div><div class="opt-text">${opt}</div>`;
+    if (!answered) div.onclick = () => selectAnswer(i);
+    container.appendChild(div);
+  });
+
+  if (answered) {
+    exp.innerHTML = `<strong>Explanation:</strong> ${q.exp}`;
+    exp.classList.add('show');
+  }
+
+  // Buttons
+  document.getElementById('prevBtn').disabled = currentIndex === 0;
+  const isLast = currentIndex === total - 1;
+  document.getElementById('nextBtn').style.display = isLast ? 'none' : 'inline-block';
+  document.getElementById('finishBtn').style.display = isLast ? 'inline-block' : 'none';
+}
+
+function selectAnswer(index) {
+  if (userAnswers[currentIndex] !== null) return;
+  userAnswers[currentIndex] = index;
+  renderQuestion();
+}
+
+function nextQuestion() {
+  if (currentIndex < questions.length - 1) {
+    currentIndex++;
+    renderQuestion();
+  }
+}
+
+function prevQuestion() {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderQuestion();
+  }
+}
+
+// ============================================================
+// FINISH
+// ============================================================
+function finishQuiz() {
+  clearInterval(timerInterval);
+  quizFinished = true;
+
+  const total = questions.length;
+  let correct = 0;
+  questions.forEach((q, i) => { if (userAnswers[i] === q.ans) correct++; });
+
+  const pct = Math.round((correct / total) * 100);
+  const timeUsed = (122 * 60) - secondsLeft;
+  const mUsed = Math.floor(timeUsed / 60);
+  const sUsed = timeUsed % 60;
+
+  // Save to localStorage
+  const prev = parseInt(localStorage.getItem('llm_best_score') || '0');
+  if (pct > prev) localStorage.setItem('llm_best_score', pct);
+  localStorage.setItem('llm_last_score', pct);
+
+  document.getElementById('quizScreen').classList.add('hidden');
+  document.getElementById('resultsScreen').classList.remove('hidden');
+
+  document.getElementById('resultsGrade').textContent = pct + '%';
+  document.getElementById('resultsGrade').style.color = pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--accent2)' : 'var(--red)';
+
+  let verdict = '';
+  if (pct >= 85) { verdict = '🏆 Excellent — You\'re ready for real LLM evaluation work!'; }
+  else if (pct >= 70) { verdict = '✅ Good — Solid performance. Keep practicing weak areas.'; }
+  else if (pct >= 55) { verdict = '⚠️ Fair — Review the explanations and retake.'; }
+  else { verdict = '📚 Needs Work — Study the topic guides and try again.'; }
+
+  const vEl = document.getElementById('verdictText');
+  vEl.textContent = verdict;
+  vEl.className = 'verdict ' + (pct >= 85 ? 'pass' : pct >= 70 ? 'good' : 'fail');
+
+  // Category breakdown
+  const cats = {};
+  questions.forEach((q, i) => {
+    if (!cats[q.cat]) cats[q.cat] = { correct: 0, total: 0 };
+    cats[q.cat].total++;
+    if (userAnswers[i] === q.ans) cats[q.cat].correct++;
+  });
+
+  const grid = document.getElementById('resultsGrid');
+  grid.innerHTML = `
+    <div class="res-item"><span class="res-val" style="color:var(--green)">${correct}</span><span class="res-key">Correct</span></div>
+    <div class="res-item"><span class="res-val" style="color:var(--red)">${total - correct}</span><span class="res-key">Incorrect</span></div>
+    <div class="res-item"><span class="res-val">${mUsed}m ${sUsed}s</span><span class="res-key">Time Used</span></div>
+    <div class="res-item"><span class="res-val" style="color:var(--accent2)">${localStorage.getItem('llm_best_score')}%</span><span class="res-key">Best Score</span></div>
+  ` + Object.entries(cats).map(([cat, data]) => `
+    <div class="res-item"><span class="res-val" style="color:var(--accent)">${Math.round(data.correct/data.total*100)}%</span><span class="res-key">${cat}</span></div>
+  `).join('');
+}
+
+function reviewAnswers() {
+  const section = document.getElementById('reviewSection');
+  if (section.style.display === 'block') { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+
+  const container = document.getElementById('reviewItems');
+  container.innerHTML = '';
+  let hasWrong = false;
+
+  questions.forEach((q, i) => {
+    if (userAnswers[i] !== q.ans) {
+      hasWrong = true;
+      const d = document.createElement('div');
+      d.className = 'review-item';
+      const userAns = userAnswers[i] !== null ? q.opts[userAnswers[i]] : 'Not answered';
+      d.innerHTML = `
+        <div class="review-q">Q${i+1} — ${q.cat}</div>
+        <div class="review-text">${q.q}</div>
+        <div class="review-answers">
+          <span class="review-ans your-wrong">✗ Your answer: ${userAns}</span>
+          <span class="review-ans correct-ans">✓ Correct: ${q.opts[q.ans]}</span>
+        </div>
+        <div style="margin-top:10px;font-size:0.82rem;color:#8899bb;line-height:1.5;">${q.exp}</div>
+      `;
+      container.appendChild(d);
+    }
+  });
+
+  if (!hasWrong) {
+    container.innerHTML = '<div style="text-align:center;color:var(--green);font-weight:700;padding:20px;">🎉 Perfect score! No incorrect answers to review.</div>';
+  }
+}
+
+function restartQuiz() {
+  document.getElementById('resultsScreen').classList.add('hidden');
+  loadBestScore();
+  startQuiz();
+}
+</script>
+</body>
+</html>
